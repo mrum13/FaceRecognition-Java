@@ -18,7 +18,11 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -27,8 +31,20 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
+
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.face.Face;
+import com.google.mlkit.vision.face.FaceDetection;
+import com.google.mlkit.vision.face.FaceDetector;
+import com.google.mlkit.vision.face.FaceDetectorOptions;
+import com.google.mlkit.vision.face.FaceLandmark;
+
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.util.List;
 
 
 public class RegisterActivity extends AppCompatActivity {
@@ -37,9 +53,18 @@ public class RegisterActivity extends AppCompatActivity {
     Uri image_uri;
     public static final int PERMISSION_CODE = 100;
 
-
+    //1 dari udemy
     //TODO declare face detector
+    // High-accuracy landmark detection and face classification
+    FaceDetectorOptions highAccuracyOpts =
+            new FaceDetectorOptions.Builder()
+                    .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                    .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+                    .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+                    .build();
 
+    //2 dari udemy
+    FaceDetector detector;
 
     //TODO declare face recognizer
 
@@ -55,6 +80,7 @@ public class RegisterActivity extends AppCompatActivity {
                         Bitmap inputImage = uriToBitmap(image_uri);
                         Bitmap rotated = rotateBitmap(inputImage);
                         imageView.setImageBitmap(rotated);
+                        performFaceDetection(rotated); //5. dari udemy
                     }
                 }
             });
@@ -69,6 +95,7 @@ public class RegisterActivity extends AppCompatActivity {
                         Bitmap inputImage = uriToBitmap(image_uri);
                         Bitmap rotated = rotateBitmap(inputImage);
                         imageView.setImageBitmap(rotated);
+                        performFaceDetection(rotated); //5. dari udemy
                     }
                 }
             });
@@ -122,7 +149,9 @@ public class RegisterActivity extends AppCompatActivity {
             }
         });
 
+        //3. dari udemy
         //TODO initialize face detector
+        detector = FaceDetection.getClient(highAccuracyOpts);
 
 
         //TODO initialize face recognition model
@@ -173,11 +202,64 @@ public class RegisterActivity extends AppCompatActivity {
         return cropped;
     }
 
+    //4. dari udemy
     //TODO perform face detection
+    public void performFaceDetection(Bitmap input) {
+        Bitmap mutableBmp = input.copy(Bitmap.Config.ARGB_8888, true); //8. dari udemy
+        Canvas canvas = new Canvas(mutableBmp); //9. dari udemy
+        InputImage image = InputImage.fromBitmap(input, 0);
 
+        //6. dari udemy
+        Task<List<Face>> result =
+                detector.process(image)
+                        .addOnSuccessListener(
+                                new OnSuccessListener<List<Face>>() {
+                                    @Override
+                                    public void onSuccess(List<Face> faces) {
+                                        // Task completed successfully
+                                        // ...
 
+                                        //7. dari udemy
+                                        for (Face face : faces) {
+                                            Rect bounds = face.getBoundingBox();
+                                            Paint p1 = new Paint();
+                                            p1.setColor(Color.RED);
+                                            p1.setStyle(Paint.Style.STROKE);
+                                            p1.setStrokeWidth(5);
+                                            performFaceRecognition(bounds, input); //9. dari udemy
+                                            canvas.drawRect(bounds, p1);
+                                        }
+//                                        imageView.setImageBitmap(mutableBmp);
+                                    }
+                                })
+                        .addOnFailureListener(
+                                new OnFailureListener() {
+                                    @Override
+                                    public void onFailure(@NonNull Exception e) {
+                                        // Task failed with an exception
+                                        // ...
+                                    }
+                                });
+    }
+
+    //8. dari udemy
     //TODO perform face recognition
-
+    public void performFaceRecognition(Rect bound, Bitmap input) {
+        if (bound.top<0) {
+            bound.top=0;
+        }
+        if (bound.left<0) {
+            bound.left=0;
+        }
+        if (bound.right>input.getWidth()) {
+            bound.right=input.getWidth()-1;
+        }
+        if (bound.bottom>input.getHeight()) {
+            bound.bottom=input.getHeight()-1;
+        }
+        Bitmap croppedFaace = Bitmap.createBitmap(input, bound.left, bound.top, bound.width(), bound.height());
+        imageView.setImageBitmap(croppedFaace);
+    }
 
     @Override
     protected void onDestroy() {
